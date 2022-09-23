@@ -31,6 +31,9 @@ xlabel('$t$', 'Interpreter', 'Latex', 'FontSize', 15);
 ylabel('$y(t)$', 'Interpreter', 'Latex', 'FontSize', 15);
 title('Comparación FDT estimada con datos experimentales dados', 'FontSize', 10);
 grid on 
+
+
+%%
 %% Punto 2
 syms x1 x2 u a b c d 
 vars = [x1, x2];
