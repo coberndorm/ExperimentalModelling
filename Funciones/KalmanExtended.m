@@ -29,7 +29,7 @@ for k=1:n
 
     % Predicción:
     try
-        x_pred = x_act + Ts*odes(x_act(1),x_act(2),u(k));
+        x_pred = x_act + Ts*odes(u(k),x_act(1),x_act(2));
     catch
         x_pred = x_act + Ts*odes(x_act(1),x_act(2));
     end
