@@ -24,9 +24,8 @@ opts = odeset('NonNegative',1:8);
 %2. Data preparation
 
 load Range7.mat
-[T,~]=gsua_dpmat(odes,vars,[0 150],'7m','output',1,'opt',opts,'Range',Range);
 load('DataBello_full.mat');
-ydata=DataBello.cases(153:303)';
+ydata=DataBello.cases(153:233)';
 xdata=linspace(0,length(ydata)-1,length(ydata));
 ydata2=ydata;
 for i=1:length(ydata)
@@ -38,11 +37,9 @@ end
 
 %3.1. Data prep
 
-[T,~]=gsua_dpmat(odes,vars,[0 150],'7m','output',1,'opt',opts,'Range',Range);
+[T,~]=gsua_dpmat(odes,vars,[0 80],'7m','output',1,'opt',opts,'Range',Range);
 T.Properties.CustomProperties.output = 1;
 M = gsua_dmatrix(T,100);
-
-%3.2. Sensibility analysis
 
 ynom = gsua_eval(T.Nominal,T);
 
@@ -51,6 +48,11 @@ title('Original Acumulated Human Infections (Hit)')
 xlabel('Weeks')
 ylabel('Cases')
 savefig('iteration1/figures/NominalValues.fig')
+
+%%
+
+
+%3.2. Sensibility analysis
 
 Tsa = gsua_sa(M,T,'parallel', false, 'SensMethod', 'Xiao', 'ynom', ynom);
 
@@ -67,40 +69,33 @@ c = sum(Tsa.Si)/sum(abs(Tsa.Si))
 %According to the sensitivity analysis, we will fix the 4 parameters with
 %the lower sensitivity indexes (with the nominal values).
 
-%These are He0 and Me0, añadir thetaH
+%These are He0
+%vars=[Hit Hi Me Hr Hs He Ms Mi];
+vars=[Hit Hi He Me Hr Hs Ms Mi];
 
-vars=[Hit Hi He Ms Me Hr Hs Mi];
-HeO = T.Nominal('He0'); MsO = T.Nominal('Ms0');
+HeO = T.Nominal('He0');
 
-RangeTemp = Range;
+RangeTemp = Range; 
 Range(3,:) = HeO; 
-Range(4,:) = MsO;
-Range(5:8,:) = [RangeTemp(3,:); RangeTemp(4,:); RangeTemp(5,:); RangeTemp(8,:)];
+Range(4:6,:) = [RangeTemp(3,:); RangeTemp(4,:); RangeTemp(5,:)];
 
-[T,~]=gsua_dpmat(odes,vars,[0 150],'7m','output',1,'opt',opts,'Range',Range);
+[T,~]=gsua_dpmat(odes,vars,[0 80],'7m','output',1,'opt',opts,'Range',Range);
 T.Properties.CustomProperties.output = 1;
 M = gsua_dmatrix(T,100);
-
+save('iteration1/values/T.mat','T')
 %%
-%We check again the sensitivy analysis
-Tsa = gsua_sa(M,T,'parallel', false, 'SensMethod', 'Xiao', 'ynom', ynom);
+%3.5. Parameter estimation
 
-gsua_plot('Bar',Tsa,Tsa.STi)
-savefig('iteration1/figures/SensibilityAnalisis2.fig')
-
-%%
-%4. Parameter estimation
-
-%4.1 Estimation
 %(takes a lot of time)
 
-opt = optimoptions('lsqcurvefit','UseParallel',false,'Display','iter');
+opt = optimoptions('lsqcurvefit','UseParallel',true,'Display','iter');
 [T7,res] = gsua_pe(T,xdata,ydata2,'N',100,'opt',opt); %mover N ( 100 buena, 50 aceptable, 10 :( )
 save('iteration1/values/Results7.mat','T7','res','xdata','ydata2')
 
 %%
-%4.2 Identifiability analysis 
-th = sum(res<res(1)*1.02)
+%3.6 Identifiability analysis 
+%Cogemos el 30 % para solo tomar una de las familias
+th = sum(res<res(1)*1.01)
 y7 = gsua_eval(T7.Estlsqc(:,1:th),T7,xdata,ydata2);
 savefig('iteration1/figures/curves.fig')
 
@@ -119,256 +114,11 @@ savefig('iteration1/figures/EstimatedvsReal.fig')
 %%
 T7.Nominal = T7.Estlsqc(:,1);
 %res : funciones de costo
-th = sum(res<res(1)*1.03) % threshold, cambiar el 1.01
+th = sum(res<res(1)*1.01) % threshold, cambiar el 1.01
 %th = 476 %el parametro que habia dado el profe, a nosotros nos da 1????
 
-T7_2 = gsua_ia(T7,T7.Estlsqc(:,1:th), false, true); 
-savefig('iteration1/figures/CorrelationsDiag.fig')
-
-%% 
-% Segunda iteracion de los calculos
+T7_ia = gsua_ia(T7,T7.Estlsqc(:,1:th), false, true); 
+%savefig('iteration1/figures/CorrelationsDiag.fig')
 
 
 
-%5.1 Aumentamos los rangos de thetaH
-T.Range('theta_h',1) = 0.4;
-
-%Realizamos analisis otra vez
-Tsa = gsua_sa(M,T,'parallel', false, 'SensMethod', 'Xiao', 'ynom', ynom);
-
-gsua_plot('Bar',Tsa,Tsa.STi)
-savefig('iteration2/figures/SensibilityAnalisis.fig')
-
-
-% Confiabilidad
-
-c = sum(Tsa.Si)/sum(abs(Tsa.Si))
-
-%%
-%5.2 estimation
-opt = optimoptions('lsqcurvefit','UseParallel',false,'Display','iter');
-[T7_1,res_1] = gsua_pe(T,xdata,ydata2,'N',100,'opt',opt); 
-save('iteration2/values/Results7.mat','T7_1','res_1','xdata','ydata2')
-
-%%
-%5.2 Identifiability analysis 
-th_1 = sum(res_1<res_1(1)*1.02)
-y7_1 = gsua_eval(T7_1.Estlsqc(:,1:th_1),T7_1,xdata,ydata2);
-savefig('iteration2/figures/curves.fig')
-
-%%
-bestest_1 = y7_1(1,:);
-trend = [bestest_1(1),bestest_1(2:end)-bestest_1(1:end-1)];
-plot(trend,'b')
-hold on
-plot(diff(ydata2),'r')
-title('Estimated vs Real Weekly Infections')
-xlabel('Weeks')
-ylabel('Cases')
-legend({'Estimated','Real'})
-savefig('iteration2/figures1/EstimatedvsReal.fig')
-
-%%
-T7_1.Nominal = T7_1.Estlsqc(:,1);
-%res : funciones de costo
-th_1 = sum(res_1<res_1(1)*1.02) % threshold, cambiar el 1.01
-%th = 476 %el parametro que habia dado el profe, a nosotros nos da 1????
-
-T7_1 = gsua_ia(T7_1,T7_1.Estlsqc(:,1:th_1), false, true); 
-savefig('iteration2/figures/Correlations.fig')
-
-%%
-% Tercera Iteracion
-%Fijamos Beta_m
-
-
-Range(10,:) = T7_1.Nominal('beta_m');
-[T,~]=gsua_dpmat(odes,vars,[0 150],'7m','output',1,'opt',opts,'Range',Range);
-T.Properties.CustomProperties.output = 1;
-M = gsua_dmatrix(T,100);
-%%
-%Realizamos analisis otra vez
-Tsa = gsua_sa(M,T,'parallel', false, 'SensMethod', 'Xiao', 'ynom', ynom);
-
-gsua_plot('Bar',Tsa,Tsa.STi)
-savefig('iteration3/figures/SensibilityAnalisis.fig')
-
-
-% Confiabilidad
-
-c = sum(Tsa.Si)/sum(abs(Tsa.Si))
-
-%%
-%5.2 estimation
-opt = optimoptions('lsqcurvefit','UseParallel',false,'Display','iter');
-[T7_2,res_2] = gsua_pe(T,xdata,ydata2,'N',100,'opt',opt); 
-save('iteration3/values/Results7.mat','T7_2','res_2','xdata','ydata2')
-
-%%
-%5.2 Identifiability analysis 
-th_2 = sum(res_2<res_2(1)*1.02)
-y7_2 = gsua_eval(T7_2.Estlsqc(:,1:th_2),T7_2,xdata,ydata2);
-savefig('iteration3/figures/curves.fig')
-
-%%
-bestest_2 = y7_2(1,:);
-trend = [bestest_2(1),bestest_2(2:end)-bestest_2(1:end-1)];
-plot(trend,'b')
-hold on
-plot(diff(ydata2),'r')
-title('Estimated vs Real Weekly Infections')
-xlabel('Weeks')
-ylabel('Cases')
-legend({'Estimated','Real'})
-savefig('iteration3/figures1/EstimatedvsReal.fig')
-
-%%
-T7_2.Nominal = T7_2.Estlsqc(:,1);
-%res : funciones de costo
-th_2 = sum(res_2<res_2(1)*1.02) % threshold, cambiar el 1.01
-%th = 476 %el parametro que habia dado el profe, a nosotros nos da 1????
-
-T7_2 = gsua_ia(T7_2,T7_2.Estlsqc(:,1:th_2), false, true); 
-savefig('iteration3/figures/Correlations.fig')
-
-%%
-%4.4 Uncertainty analysis
-
-%analisis de incertidumbre con T7_2. veamos que las curvas hagan una banda 
-%al lado de los datos que estamos estimando. Si la banda es chevere,
-%terminamos, si no, fijar algun parametro. 
-
-Ua = gsua_ua(M, T7_2, 'parallel', false, 'ynom',ydata2);
-savefig('iteration3/figures/Montecarlo.fig')
-
-%%
-% Cuarta Iteracion
-%Fijamos Beta_h
-
-
-Range(9,:) = T7_3.Nominal('beta_h');
-[T,~]=gsua_dpmat(odes,vars,[0 150],'7m','output',1,'opt',opts,'Range',Range);
-T.Properties.CustomProperties.output = 1;
-M = gsua_dmatrix(T,100);
-%%
-%Realizamos analisis otra vez
-Tsa = gsua_sa(M,T,'parallel', false, 'SensMethod', 'Xiao', 'ynom', ynom);
-
-gsua_plot('Bar',Tsa,Tsa.STi)
-savefig('iteration4/figures/SensibilityAnalisis.fig')
-
-
-% Confiabilidad
-
-c = sum(Tsa.Si)/sum(abs(Tsa.Si))
-
-%%
-%5.2 estimation
-opt = optimoptions('lsqcurvefit','UseParallel',false,'Display','iter');
-[T7_3,res_3] = gsua_pe(T,xdata,ydata2,'N',100,'opt',opt); 
-save('iteration4/values/Results7.mat','T7_3','res_3','xdata','ydata2')
-
-%%
-%5.2 Identifiability analysis 
-th_3 = sum(res_3<res_3(1)*1.02)
-y7_3 = gsua_eval(T7_3.Estlsqc(:,1:th_3),T7_3,xdata,ydata2);
-savefig('iteration4/figures/curves.fig')
-
-%%
-bestest_3 = y7_3(1,:);
-trend = [bestest_3(1),bestest_3(2:end)-bestest_3(1:end-1)];
-plot(trend,'b')
-hold on
-plot(diff(ydata2),'r')
-title('Estimated vs Real Weekly Infections')
-xlabel('Weeks')
-ylabel('Cases')
-legend({'Estimated','Real'})
-savefig('iteration4/figures/EstimatedvsReal.fig')
-
-%%
-T7_3.Nominal = T7_3.Estlsqc(:,1);
-%res : funciones de costo
-th_3 = sum(res_3<res_3(1)*1.02) % threshold, cambiar el 1.01
-%th = 476 %el parametro que habia dado el profe, a nosotros nos da 1????
-
-T7_3 = gsua_ia(T7_3,T7_3.Estlsqc(:,1:th_3), false, true); 
-savefig('iteration4/figures/Correlations.fig')
-
-%%
-%Uncertainty analysis
-
-%analisis de incertidumbre con T7_3. veamos que las curvas hagan una banda 
-%al lado de los datos que estamos estimando. Si la banda es chevere,
-%terminamos, si no, fijar algun parametro. 
-
-Ua = gsua_ua(M, T7_3, 'parallel', false, 'ynom',ydata2);
-savefig('iteration4/figures/Montecarlo.fig')
-
-%%
-% Quinta Iteracion
-%Fijamos Lambda
-
-
-Range(9,:) = T7_3.Nominal('beta_h');
-[T,~]=gsua_dpmat(odes,vars,[0 150],'7m','output',1,'opt',opts,'Range',Range);
-T.Properties.CustomProperties.output = 1;
-M = gsua_dmatrix(T,100);
-%%
-%Realizamos analisis otra vez
-Tsa = gsua_sa(M,T,'parallel', false, 'SensMethod', 'Xiao', 'ynom', ynom);
-
-gsua_plot('Bar',Tsa,Tsa.STi)
-savefig('iteration4/figures/SensibilityAnalisis.fig')
-
-
-% Confiabilidad
-
-c = sum(Tsa.Si)/sum(abs(Tsa.Si))
-
-%%
-%5.2 estimation
-opt = optimoptions('lsqcurvefit','UseParallel',false,'Display','iter');
-[T7_3,res_3] = gsua_pe(T,xdata,ydata2,'N',100,'opt',opt); 
-save('iteration4/values/Results7.mat','T7_3','res_3','xdata','ydata2')
-
-%%
-%5.2 Identifiability analysis 
-th_3 = sum(res_3<res_3(1)*1.02)
-y7_3 = gsua_eval(T7_3.Estlsqc(:,1:th_3),T7_3,xdata,ydata2);
-savefig('iteration4/figures/curves.fig')
-
-%%
-bestest_3 = y7_3(1,:);
-trend = [bestest_3(1),bestest_3(2:end)-bestest_3(1:end-1)];
-plot(trend,'b')
-hold on
-plot(diff(ydata2),'r')
-title('Estimated vs Real Weekly Infections')
-xlabel('Weeks')
-ylabel('Cases')
-legend({'Estimated','Real'})
-savefig('iteration4/figures/EstimatedvsReal.fig')
-
-%%
-T7_3.Nominal = T7_3.Estlsqc(:,1);
-%res : funciones de costo
-th_3 = sum(res_3<res_3(1)*1.02) % threshold, cambiar el 1.01
-%th = 476 %el parametro que habia dado el profe, a nosotros nos da 1????
-
-T7_3 = gsua_ia(T7_3,T7_3.Estlsqc(:,1:th_3), false, true); 
-savefig('iteration4/figures/Correlations.fig')
-
-%%
-%Uncertainty analysis
-
-%analisis de incertidumbre con T7_3. veamos que las curvas hagan una banda 
-%al lado de los datos que estamos estimando. Si la banda es chevere,
-%terminamos, si no, fijar algun parametro. 
-
-Ua = gsua_ua(M, T7_3, 'parallel', false, 'ynom',ydata2);
-savefig('iteration4/figures/Montecarlo.fig')
-
-%%
-T7_3.Properties.CustomProperties.output = 1:4;
-gsua_eval(T7_3.Estlsqc(:,1:th_3),T7,xdata,ydata2)
